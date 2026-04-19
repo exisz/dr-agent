@@ -1,12 +1,16 @@
 {
   "name": "dr-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Doctor for AI agent codebases — catches common pitfalls before they cost you days",
   "type": "module",
   "bin": {
     "dr-agent": "dist/index.js"
   },
-  "main": "./dist/index.js",
+  "main": "./dist/api.js",
+  "exports": {
+    ".": "./dist/api.js",
+    "./cli": "./dist/index.js"
+  },
   "files": [
     "dist",
     "README.md",

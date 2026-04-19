@@ -1,4 +1,5 @@
 export type Severity = 'high' | 'medium' | 'low' | 'info';
+export type FailOn = 'high' | 'medium' | 'low' | 'none';
 
 export interface Finding {
   ruleId: string;
@@ -9,6 +10,8 @@ export interface Finding {
   references: string[];
   file?: string;
   line?: number;
+  column?: number;
+  message?: string;
 }
 
 export interface Rule {
@@ -29,4 +32,11 @@ export interface RunOptions {
   json?: boolean;
   severity?: Severity;
   rules?: string[];
+  failOn?: FailOn;
+}
+
+export interface DrAgentConfig {
+  rules?: Record<string, Severity | 'off'>;
+  ignorePaths?: string[];
+  failOn?: FailOn;
 }
