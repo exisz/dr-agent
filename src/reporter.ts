@@ -22,9 +22,23 @@ const SEVERITY_ICON: Record<Severity, string> = {
   info: 'ℹ',
 };
 
-export function formatFindings(findings: Finding[], asJson: boolean): string {
+export function formatFindings(findings: Finding[], asJson: boolean, asSarif?: boolean): string {
+  if (asSarif) {
+    return formatSarif(findings);
+  }
+
   if (asJson) {
-    return JSON.stringify(findings, null, 2);
+    const output = findings.map(f => ({
+      ruleId: f.ruleId,
+      severity: f.severity,
+      file: f.file,
+      line: f.line,
+      column: f.column,
+      message: f.message ?? f.title,
+      fix: f.fix,
+      references: f.references,
+    }));
+    return JSON.stringify(output, null, 2);
   }
 
   if (findings.length === 0) {
@@ -67,4 +81,56 @@ export function formatFindings(findings: Finding[], asJson: boolean): string {
   lines.push(chalk.bold(`Found ${findings.length} issue(s): ${summary}`));
 
   return lines.join('\n');
+}
+
+function formatSarif(findings: Finding[]): string {
+  const rules = [...new Set(findings.map(f => f.ruleId))].map(id => {
+    const f = findings.find(x => x.ruleId === id)!;
+    return {
+      id,
+      name: id.replace(/-([a-z])/g, (_, c) => c.toUpperCase()),
+      shortDescription: { text: f.title },
+      fullDescription: { text: f.why },
+      helpUri: f.references[0] ?? 'https://github.com/exisz/dr-agent',
+      defaultConfiguration: {
+        level: f.severity === 'high' ? 'error' : f.severity === 'medium' ? 'warning' : 'note',
+      },
+    };
+  });
+
+  const results = findings.map(f => ({
+    ruleId: f.ruleId,
+    level: f.severity === 'high' ? 'error' : f.severity === 'medium' ? 'warning' : 'note',
+    message: { text: f.message ?? f.title },
+    locations: f.file
+      ? [
+          {
+            physicalLocation: {
+              artifactLocation: { uri: f.file, uriBaseId: '%SRCROOT%' },
+              region: { startLine: f.line ?? 1, startColumn: f.column ?? 1 },
+            },
+          },
+        ]
+      : [],
+  }));
+
+  const sarif = {
+    $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+    version: '2.1.0',
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: 'dr-agent',
+            version: '0.2.0',
+            informationUri: 'https://github.com/exisz/dr-agent',
+            rules,
+          },
+        },
+        results,
+      },
+    ],
+  };
+
+  return JSON.stringify(sarif, null, 2);
 }
