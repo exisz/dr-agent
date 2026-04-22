@@ -7,20 +7,22 @@ const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', 'coverage']
 
 export function collectFiles(dir: string): ScannedFile[] {
   const absDir = path.resolve(dir);
-  const pattern = `**/*.{js,ts,jsx,tsx,mjs,cjs,env,json}`;
+  const pattern = `**/*.{js,ts,jsx,tsx,mjs,cjs,env,json,yaml,yml}`;
 
   const filePaths = globSync(pattern, {
     cwd: absDir,
-    absolute: true,
+    absolute: false,
     ignore: SKIP_DIRS.map(d => `**/${d}/**`),
   });
 
   const results: ScannedFile[] = [];
-  for (const fp of filePaths) {
+  for (const rel of filePaths) {
+    const fp = path.join(absDir, rel);
     try {
       const content = readFileSync(fp, 'utf-8');
       results.push({
-        path: fp,
+        // Keep path relative to the scanned root so rules can match by repo-relative paths.
+        path: rel,
         content,
         lines: content.split('\n'),
       });
