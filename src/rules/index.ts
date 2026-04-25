@@ -5,6 +5,7 @@ import { lowContrastCss } from './low-contrast-css.js';
 import { uiLeaksInternalTechNames } from './ui-leaks-internal-tech-names.js';
 import { smallTapTargets } from './small-tap-targets.js';
 import { logtoPostLogoutUri } from './logto-post-logout-uri.js';
+import { inconsistentModals } from './inconsistent-modals.js';
 import type { Rule } from '../types.js';
 
 export const rules: Rule[] = [
@@ -15,6 +16,7 @@ export const rules: Rule[] = [
   uiLeaksInternalTechNames,
   smallTapTargets,
   logtoPostLogoutUri,
+  inconsistentModals,
 ];
 
 export function getRuleById(id: string): Rule | undefined {

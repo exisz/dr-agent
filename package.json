@@ -1,6 +1,6 @@
 {
   "name": "dr-agent",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Doctor for AI agent codebases — catches common pitfalls before they cost you days",
   "type": "module",
   "bin": {
