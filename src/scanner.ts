@@ -7,7 +7,7 @@ const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', 'coverage']
 
 export function collectFiles(dir: string): ScannedFile[] {
   const absDir = path.resolve(dir);
-  const pattern = `**/*.{js,ts,jsx,tsx,mjs,cjs,env,json,yaml,yml}`;
+  const pattern = `**/*.{js,ts,jsx,tsx,mjs,cjs,env,json,yaml,yml,css,scss,less}`;
 
   const filePaths = globSync(pattern, {
     cwd: absDir,

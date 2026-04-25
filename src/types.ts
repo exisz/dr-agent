@@ -11,12 +11,16 @@ export interface Finding {
   line?: number;
 }
 
+export interface RuleContext {
+  scanRoot: string; // absolute path of the scanned directory
+}
+
 export interface Rule {
   id: string;
   severity: Severity;
   title: string;
   description: string;
-  check(files: ScannedFile[]): Finding[];
+  check(files: ScannedFile[], ctx?: RuleContext): Finding[];
 }
 
 export interface ScannedFile {
