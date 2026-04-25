@@ -1,7 +1,7 @@
 {
   "name": "dr-agent",
-  "version": "0.4.0",
-  "description": "Doctor for AI agent codebases — catches common pitfalls before they cost you days",
+  "version": "0.3.3",
+  "description": "Doctor for AI agent codebases \u2014 catches common pitfalls before they cost you days",
   "type": "module",
   "bin": {
     "dr-agent": "dist/index.js"
