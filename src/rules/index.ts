@@ -6,6 +6,7 @@ import { uiLeaksInternalTechNames } from './ui-leaks-internal-tech-names.js';
 import { smallTapTargets } from './small-tap-targets.js';
 import { logtoPostLogoutUri } from './logto-post-logout-uri.js';
 import { inconsistentModals } from './inconsistent-modals.js';
+import { systemdServiceUserMismatch } from './systemd-service-user-mismatch.js';
 import type { Rule } from '../types.js';
 
 export const rules: Rule[] = [
@@ -17,6 +18,7 @@ export const rules: Rule[] = [
   smallTapTargets,
   logtoPostLogoutUri,
   inconsistentModals,
+  systemdServiceUserMismatch,
 ];
 
 export function getRuleById(id: string): Rule | undefined {

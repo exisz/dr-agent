@@ -1,0 +1,9 @@
+id: dna://project/dr-agent
+type: project
+managed_by: dna://agent/nebula
+goal: TODO — fill in project goal
+boundary:
+  - TODO — fill in boundary
+status: stub
+repo: exisz/dr-agent
+built_from: dna://maintained-oss/exisz-dr-agent
