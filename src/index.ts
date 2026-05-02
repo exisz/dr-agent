@@ -59,6 +59,42 @@ program
     if (!opts.json && findings.length > 0) {
       process.exitCode = 1;
     }
+
+    // --- Fallow integration (always runs) ---
+    const { execSync } = await import('child_process');
+    const fallowCwd = path.resolve(dir);
+    try {
+      if (!opts.json) {
+        console.log(chalk.bold('\n🔬 fallow codebase analysis\n'));
+      }
+      const fallowArgs = opts.json ? 'fallow --format json' : 'fallow';
+      const result = execSync(`npx --yes ${fallowArgs}`, {
+        cwd: fallowCwd,
+        encoding: 'utf-8',
+        stdio: opts.json ? ['pipe', 'pipe', 'pipe'] : ['pipe', 'inherit', 'inherit'],
+        timeout: 60_000,
+      });
+      if (opts.json && result) {
+        // Merge fallow output into a wrapper
+        try {
+          const fallowData = JSON.parse(result);
+          console.log(JSON.stringify({ fallow: fallowData }));
+        } catch { console.log(result); }
+      }
+    } catch (e: any) {
+      if (e.status) {
+        if (opts.json && e.stdout) {
+          try {
+            const fallowData = JSON.parse(e.stdout);
+            console.log(JSON.stringify({ fallow: fallowData }));
+          } catch { console.log(e.stdout); }
+        }
+        // fallow findings exist — mark exit
+        process.exitCode = 1;
+      } else if (!opts.json) {
+        console.log(chalk.dim('  fallow not available (install: npm i -g fallow)\n'));
+      }
+    }
   });
 
 program
