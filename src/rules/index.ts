@@ -7,6 +7,7 @@ import { smallTapTargets } from './small-tap-targets.js';
 import { logtoPostLogoutUri } from './logto-post-logout-uri.js';
 import { inconsistentModals } from './inconsistent-modals.js';
 import { systemdServiceUserMismatch } from './systemd-service-user-mismatch.js';
+import { localDevDrift } from './local-dev-drift.js';
 import type { Rule } from '../types.js';
 
 export const rules: Rule[] = [
@@ -19,6 +20,7 @@ export const rules: Rule[] = [
   logtoPostLogoutUri,
   inconsistentModals,
   systemdServiceUserMismatch,
+  localDevDrift,
 ];
 
 export function getRuleById(id: string): Rule | undefined {
