@@ -8,6 +8,9 @@ import { logtoPostLogoutUri } from './logto-post-logout-uri.js';
 import { inconsistentModals } from './inconsistent-modals.js';
 import { systemdServiceUserMismatch } from './systemd-service-user-mismatch.js';
 import { localDevDrift } from './local-dev-drift.js';
+import { gogGmailWrongSyntax } from './gog-gmail-wrong-syntax.js';
+import { jiraPhantomProject } from './jira-phantom-project.js';
+import { cronLiveInfraChecks } from './cron-live-infra-checks.js';
 import type { Rule } from '../types.js';
 
 export const rules: Rule[] = [
@@ -21,6 +24,9 @@ export const rules: Rule[] = [
   inconsistentModals,
   systemdServiceUserMismatch,
   localDevDrift,
+  gogGmailWrongSyntax,
+  jiraPhantomProject,
+  cronLiveInfraChecks,
 ];
 
 export function getRuleById(id: string): Rule | undefined {
