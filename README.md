@@ -32,8 +32,11 @@ dr-agent run --json
 # Only show high severity
 dr-agent run --severity high
 
-# List all rules
+# List local/built-in rules
 dr-agent list-rules
+
+# Include fleet/global DNA rules when you intentionally want empire-wide checks
+dr-agent run --global-dna
 
 # Explain a specific rule
 dr-agent explain logto-resource-token-userinfo
@@ -80,6 +83,8 @@ More rules coming. [Contribute a rule →](CONTRIBUTING.md)
 
 dr-agent uses **file traversal + regex detection** (no AST overhead). Each rule is a module in `src/rules/` that receives the list of scanned files and returns findings.
 
+Rules are scoped to the scanned project context. Per-repo DNA rules are loaded from `<scanRoot>/.dna/deprecated/`; fleet/global DNA rules from `~/.openclaw/.dna/deprecated/` are opt-in via `--global-dna` so unrelated projects do not report global machine/empire issues.
+
 Skipped directories: `node_modules`, `.git`, `dist`, `build`, `.next`, `coverage`.
 
 ## Flags
@@ -89,6 +94,7 @@ Skipped directories: `node_modules`, `.git`, `dist`, `build`, `.next`, `coverage
 | `--json` | Output findings as JSON |
 | `--severity <level>` | Minimum severity: `high`, `medium`, `low`, `info` |
 | `--rules <id,id>` | Only run specific rules (comma-separated IDs) |
+| `--global-dna` | Opt in to fleet/global DNA deprecated rules from `~/.openclaw/.dna/deprecated/` |
 
 ## Contributing
 

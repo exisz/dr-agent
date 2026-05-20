@@ -20,7 +20,8 @@ program
   .option('--json', 'Output results as JSON')
   .option('--severity <level>', 'Minimum severity to report (high|medium|low|info)', 'info')
   .option('--rules <ids>', 'Comma-separated rule IDs to run (default: all)')
-  .action(async (scanPath: string | undefined, opts: { json?: boolean; severity?: string; rules?: string }) => {
+  .option('--global-dna', 'Also load fleet/global DNA deprecated rules from ~/.openclaw/.dna/deprecated')
+  .action(async (scanPath: string | undefined, opts: { json?: boolean; severity?: string; rules?: string; globalDna?: boolean }) => {
     const dir = scanPath ?? '.';
     const minSev = (opts.severity ?? 'info') as Severity;
     const ruleFilter = opts.rules?.split(',').map(r => r.trim());
@@ -28,14 +29,15 @@ program
     const sevOrder: Record<Severity, number> = { high: 0, medium: 1, low: 2, info: 3 };
 
     // Merge builtin rules with rules derived from .dna shards (deprecated entries)
-    const dnaRules: Rule[] = await loadDnaRules(dir);
+    const dnaRules: Rule[] = await loadDnaRules(dir, { includeGlobal: opts.globalDna ?? false });
     const allRules: Rule[] = [...builtinRules, ...dnaRules];
     const activeRules = allRules.filter(r => !ruleFilter || ruleFilter.includes(r.id));
 
     if (!opts.json) {
       console.log(chalk.bold(`\n🩺 dr-agent scanning: ${dir}\n`));
       if (dnaRules.length > 0) {
-        console.log(chalk.dim(`  ${dnaRules.length} dna-derived rule(s) loaded from .dna/deprecated\n`));
+        const dnaScope = opts.globalDna ? 'local + global DNA' : 'local DNA';
+        console.log(chalk.dim(`  ${dnaRules.length} dna-derived rule(s) loaded from ${dnaScope}\n`));
       }
     }
 
@@ -102,8 +104,9 @@ program
   .description('List all available rules with their severity')
   .option('--json', 'Output as JSON')
   .option('--scan-dir <dir>', 'Scan directory for .dna-derived rules (default: cwd)', '.')
-  .action(async (opts: { json?: boolean; scanDir?: string }) => {
-    const dnaRules: Rule[] = await loadDnaRules(opts.scanDir ?? '.');
+  .option('--global-dna', 'Also list fleet/global DNA deprecated rules from ~/.openclaw/.dna/deprecated')
+  .action(async (opts: { json?: boolean; scanDir?: string; globalDna?: boolean }) => {
+    const dnaRules: Rule[] = await loadDnaRules(opts.scanDir ?? '.', { includeGlobal: opts.globalDna ?? false });
     const all: Rule[] = [...builtinRules, ...dnaRules];
     if (opts.json) {
       console.log(JSON.stringify(all.map(r => ({ id: r.id, severity: r.severity, title: r.title, description: r.description })), null, 2));

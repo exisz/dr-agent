@@ -9,13 +9,21 @@
  *
  * Discovery roots:
  *   1. `<scanRoot>/.dna/deprecated/` (per-repo overrides)
- *   2. `~/.openclaw/.dna/deprecated/` (global / fleet-wide)
+ *   2. `~/.openclaw/.dna/deprecated/` only when explicitly requested
+ *
+ * Global/fleet-wide DNA is intentionally opt-in. A doctor run in an unrelated
+ * project should not report empire-wide deprecated patterns unless the caller
+ * asks for fleet/global checks.
  */
 import { readdirSync, readFileSync, existsSync, statSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import yaml from 'js-yaml';
 import type { Severity } from './types.js';
+
+export interface LoadDnaDeprecatedOptions {
+  includeGlobal?: boolean;
+}
 
 export interface DnaDeprecated {
   /** Canonical id, e.g. dna://deprecated/no-next-auth */
@@ -125,16 +133,17 @@ function scanDir(dir: string): DnaDeprecated[] {
 }
 
 /**
- * Load all deprecated DNA entries visible from a scan root.
- * Looks in <scanDir>/.dna/deprecated and ~/.openclaw/.dna/deprecated.
+ * Load deprecated DNA entries visible from a scan root.
+ * Looks in <scanDir>/.dna/deprecated by default.
+ * When includeGlobal=true, also loads ~/.openclaw/.dna/deprecated.
  * Per-repo entries take precedence (by id) over global ones.
  */
-export function loadDnaDeprecated(scanDir: string): DnaDeprecated[] {
+export function loadDnaDeprecated(scanDir: string, opts: LoadDnaDeprecatedOptions = {}): DnaDeprecated[] {
   const localDir = path.join(path.resolve(scanDir), '.dna', 'deprecated');
   const globalDir = path.join(homedir(), '.openclaw', '.dna', 'deprecated');
 
   const local = scanDir ? scanDirHelper(localDir) : [];
-  const global = scanDirHelper(globalDir);
+  const global = opts.includeGlobal ? scanDirHelper(globalDir) : [];
 
   // Local overrides global by id
   const byId = new Map<string, DnaDeprecated>();

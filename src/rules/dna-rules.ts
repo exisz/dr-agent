@@ -13,7 +13,7 @@ import { pathToFileURL } from 'url';
 import path from 'path';
 import { existsSync } from 'fs';
 import type { Rule, Finding, ScannedFile, Severity } from '../types.js';
-import { loadDnaDeprecated, type DnaDeprecated } from '../dna-loader.js';
+import { loadDnaDeprecated, type DnaDeprecated, type LoadDnaDeprecatedOptions } from '../dna-loader.js';
 
 /** Build a "Why" message from DNA metadata. */
 function buildWhy(entry: DnaDeprecated): string {
@@ -158,8 +158,8 @@ async function loadCompanionRule(tsPath: string): Promise<Rule | null> {
  * Public entry point: discover deprecated DNA shards and return a Rule[] ready
  * to merge with the builtin ruleset.
  */
-export async function loadDnaRules(scanDir: string): Promise<Rule[]> {
-  const entries = loadDnaDeprecated(scanDir);
+export async function loadDnaRules(scanDir: string, opts: LoadDnaDeprecatedOptions = {}): Promise<Rule[]> {
+  const entries = loadDnaDeprecated(scanDir, opts);
   const rules: Rule[] = [];
 
   for (const entry of entries) {

@@ -1,23 +1,15 @@
 /**
- * local-dev-drift: Detect uncommitted changes or untracked files in repos
- * that are installed globally via npm link (local dev mode).
+ * local-dev-drift: Detect uncommitted changes in the *current scanned repo*
+ * only when that repo is installed globally via npm link.
  *
- * This catches the insidious class of bug where local hacks work on the
- * development machine but break on any clean install (e.g. nvm reinstall,
- * new machine, CI). If a tool is running from a local repo (npm link),
- * ALL changes must be committed and ideally pushed.
+ * This must be context-aware. Older versions checked a hardcoded list of
+ * empire tool repos no matter which project was being scanned, so running
+ * `dr-agent` inside any unrelated project reported global/local machine state.
  */
 import { execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import type { Rule, Finding, ScannedFile, RuleContext } from '../types.js';
-
-/** Known globally-linked tool repos to check */
-const TOOL_REPOS = [
-  { name: 'lazyjira', path: '/Users/c/repos/lazyjira' },
-  { name: 'openclaw-extensions', path: '/Users/c/repos/nebula/openclaw-extensions' },
-  { name: 'dr-agent', path: '/Users/c/repos/nebula/dr-agent' },
-];
 
 interface DriftInfo {
   repo: string;
@@ -27,11 +19,49 @@ interface DriftInfo {
   unpushed: number;
 }
 
+function packageName(files: ScannedFile[]): string | null {
+  const pkg = files.find(f => f.path === 'package.json');
+  if (!pkg) return null;
+
+  try {
+    const parsed = JSON.parse(pkg.content);
+    return typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function linkedPackagePath(name: string): string | null {
+  try {
+    const root = execSync('npm root -g', { encoding: 'utf-8', timeout: 5000 }).trim();
+    if (!root) return null;
+
+    const packagePath = path.join(root, ...name.split('/'));
+    if (!existsSync(packagePath)) return null;
+    return realpathSync(packagePath);
+  } catch {
+    return null;
+  }
+}
+
+function isCurrentRepoGloballyLinked(scanRoot: string, files: ScannedFile[]): boolean {
+  const name = packageName(files);
+  if (!name) return false;
+
+  const linkedPath = linkedPackagePath(name);
+  if (!linkedPath) return false;
+
+  try {
+    return realpathSync(scanRoot) === linkedPath;
+  } catch {
+    return false;
+  }
+}
+
 function checkRepo(repoPath: string): DriftInfo | null {
   if (!existsSync(repoPath)) return null;
 
   try {
-    // Check for uncommitted changes (staged + unstaged)
     const statusOutput = execSync('git status --porcelain', {
       cwd: repoPath,
       encoding: 'utf-8',
@@ -42,7 +72,6 @@ function checkRepo(repoPath: string): DriftInfo | null {
     const uncommitted = lines.filter(l => !l.startsWith('??'));
     const untracked = lines.filter(l => l.startsWith('??')).map(l => l.slice(3));
 
-    // Check for unpushed commits
     let unpushed = 0;
     try {
       const ahead = execSync('git rev-list --count @{u}..HEAD', {
@@ -52,11 +81,11 @@ function checkRepo(repoPath: string): DriftInfo | null {
       }).trim();
       unpushed = parseInt(ahead, 10) || 0;
     } catch {
-      // No upstream configured — that's fine
+      // No upstream configured — skip the unpushed check.
     }
 
     if (uncommitted.length === 0 && untracked.length === 0 && unpushed === 0) {
-      return null; // Clean
+      return null;
     }
 
     return {
@@ -67,56 +96,52 @@ function checkRepo(repoPath: string): DriftInfo | null {
       unpushed,
     };
   } catch {
-    return null; // Can't check — skip
+    return null;
   }
 }
 
 export const localDevDrift: Rule = {
   id: 'local-dev-drift',
   severity: 'high',
-  title: 'Local tool repo out of sync with published version',
+  title: 'Current npm-linked tool repo is out of sync with published version',
   description:
-    'A globally-linked npm tool repo has uncommitted changes, untracked files, or unpushed commits. ' +
-    'These local-only modifications work on this machine but will be lost on any clean install ' +
-    '(nvm reinstall, new machine, CI). All changes must be committed and pushed.',
+    'When the current scanned repo is installed globally via npm link, detect uncommitted changes, ' +
+    'untracked files, or unpushed commits. This rule is intentionally scoped to the current repo; ' +
+    'it must not report unrelated global machine state.',
 
-  check(_files: ScannedFile[], _ctx?: RuleContext): Finding[] {
-    const findings: Finding[] = [];
+  check(files: ScannedFile[], ctx?: RuleContext): Finding[] {
+    const scanRoot = path.resolve(ctx?.scanRoot ?? process.cwd());
+    if (!isCurrentRepoGloballyLinked(scanRoot, files)) return [];
 
-    for (const tool of TOOL_REPOS) {
-      const drift = checkRepo(tool.path);
-      if (!drift) continue;
+    const drift = checkRepo(scanRoot);
+    if (!drift) return [];
 
-      const parts: string[] = [];
-      if (drift.untracked.length > 0) {
-        parts.push(`${drift.untracked.length} untracked file(s): ${drift.untracked.slice(0, 5).join(', ')}`);
-      }
-      if (drift.uncommitted.length > 0) {
-        parts.push(`${drift.uncommitted.length} uncommitted change(s)`);
-      }
-      if (drift.unpushed > 0) {
-        parts.push(`${drift.unpushed} unpushed commit(s)`);
-      }
-
-      findings.push({
-        ruleId: 'local-dev-drift',
-        severity: 'high',
-        title: `[${tool.name}] ${parts.join('; ')}`,
-        why:
-          `The repo at ${drift.repoPath} has local-only changes that won't survive a clean install. ` +
-          `This exact issue caused 6 audit cycles of false "tool missing" reports (HQ-1363) when ` +
-          `openclaw-extensions had cron-investigate.ts as an untracked file.`,
-        fix: [
-          `cd ${drift.repoPath}`,
-          `git add -A && git commit -m "fix: commit local changes"`,
-          `git push`,
-          `Then publish a new npm version if needed`,
-        ],
-        references: ['HQ-1363', 'HQ-1349'],
-        file: drift.repoPath,
-      });
+    const parts: string[] = [];
+    if (drift.untracked.length > 0) {
+      parts.push(`${drift.untracked.length} untracked file(s): ${drift.untracked.slice(0, 5).join(', ')}`);
+    }
+    if (drift.uncommitted.length > 0) {
+      parts.push(`${drift.uncommitted.length} uncommitted change(s)`);
+    }
+    if (drift.unpushed > 0) {
+      parts.push(`${drift.unpushed} unpushed commit(s)`);
     }
 
-    return findings;
+    return [{
+      ruleId: 'local-dev-drift',
+      severity: 'high',
+      title: `[${drift.repo}] ${parts.join('; ')}`,
+      why:
+        `The scanned repo at ${drift.repoPath} is globally linked via npm and has local-only changes. ` +
+        'Those changes can make the tool appear fixed on this machine while clean installs, CI, or other machines still run the published version.',
+      fix: [
+        `cd ${drift.repoPath}`,
+        'git add -A && git commit -m "fix: commit local changes"',
+        'git push',
+        'Publish a new npm version if the globally consumed package needs the fix.',
+      ],
+      references: ['HQ-1363', 'HQ-1349', 'Issue #5'],
+      file: drift.repoPath,
+    }];
   },
 };
