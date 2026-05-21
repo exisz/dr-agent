@@ -12,6 +12,7 @@ import { gogGmailWrongSyntax } from './gog-gmail-wrong-syntax.js';
 import { jiraPhantomProject } from './jira-phantom-project.js';
 import { cronLiveInfraChecks } from './cron-live-infra-checks.js';
 import { ghProjectv2OptionsOverwrite } from './gh-projectv2-options-overwrite.js';
+import { baseVolumeRepoLocation } from './base-volume-repo-location.js';
 import type { Rule } from '../types.js';
 
 export const rules: Rule[] = [
@@ -29,6 +30,7 @@ export const rules: Rule[] = [
   jiraPhantomProject,
   cronLiveInfraChecks,
   ghProjectv2OptionsOverwrite,
+  baseVolumeRepoLocation,
 ];
 
 export function getRuleById(id: string): Rule | undefined {
