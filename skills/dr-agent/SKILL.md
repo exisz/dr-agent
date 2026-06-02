@@ -65,6 +65,33 @@ When reviewing unfamiliar auth patterns:
 dr-agent explain logto-resource-token-userinfo
 ```
 
+### 4. Regression Watchlist
+
+Use regression entries for requirements that must be re-checked during future audits.
+
+```bash
+# Create a regression finding with lifecycle metadata
+dr-agent regression add \
+  --path /path/to/workspace \
+  --id chatgpt_sent_prompt_matches_storyteller_work \
+  --title "Historical sent ChatGPT mails contain intended Storyteller work" \
+  --requirement "LoreMaster must send the intended prompt content to ChatGPT" \
+  --watch "wrong project|stale template|generic placeholder" \
+  --how-to-test "Inspect historical sent ChatGPT mails and verify the outgoing prompt/body matches the intended Storyteller work." \
+  --command "chatgpt pending list --project Storyteller --status all --json" \
+  --severity high \
+  --created-at 2026-06-02
+
+# List active regressions; stabilized entries are hidden by default
+dr-agent regressions --path /path/to/workspace --json
+
+# Record audit outcomes
+dr-agent regression audit chatgpt_sent_prompt_matches_storyteller_work --path /path/to/workspace --passed --note "recent sent mails match intended prompt"
+dr-agent regression audit chatgpt_sent_prompt_matches_storyteller_work --path /path/to/workspace --failed --note "sent mail used stale template"
+```
+
+Fields include `createdAt`, `auditRecords`, `lastKnownRegressionAt`, `consecutiveCleanAudits`, `stabilizedAt`, and `howToTest`. After 14 consecutive clean audits, Dr Agent marks the entry stabilized and omits it from normal `regressions` output.
+
 ---
 
 ## Rules Reference

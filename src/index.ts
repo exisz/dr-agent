@@ -6,7 +6,7 @@ import { loadDnaRules } from './rules/dna-rules.js';
 import { collectFiles } from './scanner.js';
 import { formatFindings } from './reporter.js';
 import type { Severity, Finding, Rule } from './types.js';
-import { addRegression, loadRegistry, registryPath, slugify } from './regression-registry.js';
+import { activeEntries, addRegression, auditRegression, loadRegistry, registryPath, slugify } from './regression-registry.js';
 
 const program = new Command();
 
@@ -122,22 +122,27 @@ program
     }
   });
 
-program
+const regression = program
   .command('regression')
-  .description('Manage regression watchlist entries stored in .dr-agent/regressions.json')
+  .description('Manage regression watchlist entries stored in .dr-agent/regressions.json');
+
+regression
   .command('add')
   .description('Add a regression watchlist entry')
   .requiredOption('--title <title>', 'Short title')
   .requiredOption('--requirement <text>', 'Requirement that must not regress')
   .requiredOption('--watch <text>', 'What future agents should watch for; repeat or separate with |')
+  .requiredOption('--how-to-test <text>', 'How an auditor should verify this regression has not recurred')
   .option('--id <id>', 'Stable entry id; defaults to a slug of title')
   .option('--severity <level>', 'Severity (high|medium|low|info)', 'medium')
   .option('--agent <id>', 'Owning agent/workspace id')
   .option('--source <text>', 'Where this requirement came from')
+  .option('--created-at <date>', 'First created date (YYYY-MM-DD or ISO timestamp)')
+  .option('--command <command>', 'Deterministic audit command, when available')
   .option('--path <dir>', 'Workspace path for local registry', '.')
   .option('--global', 'Use global registry under ~/.openclaw/.dr-agent')
   .option('--json', 'Output JSON')
-  .action((opts: { title: string; requirement: string; watch: string; id?: string; severity?: string; agent?: string; source?: string; path?: string; global?: boolean; json?: boolean }) => {
+  .action((opts: { title: string; requirement: string; watch: string; howToTest: string; id?: string; severity?: string; agent?: string; source?: string; createdAt?: string; command?: string; path?: string; global?: boolean; json?: boolean }) => {
     const severity = (opts.severity ?? 'medium') as Severity;
     if (!['high', 'medium', 'low', 'info'].includes(severity)) {
       console.error(chalk.red(`Invalid severity: ${opts.severity}`));
@@ -153,6 +158,9 @@ program
       scope: opts.global ? 'global' : 'workspace',
       agent: opts.agent,
       source: opts.source,
+      createdAt: opts.createdAt,
+      howToTest: opts.howToTest,
+      command: opts.command,
     });
     if (opts.json) {
       console.log(JSON.stringify({ path: file, entry }, null, 2));
@@ -162,29 +170,60 @@ program
     console.log(chalk.dim(`Registry: ${file}`));
   });
 
+regression
+  .command('audit <id>')
+  .description('Append an audit result to a regression watchlist entry')
+  .option('--passed', 'Regression did not reproduce')
+  .option('--failed', 'Regression reproduced')
+  .option('--note <note>', 'Audit note')
+  .option('--at <date>', 'Audit timestamp (YYYY-MM-DD or ISO timestamp)')
+  .option('--path <dir>', 'Workspace path for local registry', '.')
+  .option('--global', 'Use global registry under ~/.openclaw/.dr-agent')
+  .option('--json', 'Output JSON')
+  .action((id: string, opts: { passed?: boolean; failed?: boolean; note?: string; at?: string; path?: string; global?: boolean; json?: boolean }) => {
+    if (opts.passed === opts.failed) {
+      console.error(chalk.red('Specify exactly one of --passed or --failed'));
+      process.exit(1);
+    }
+    const file = registryPath(opts.path ?? '.', opts.global ?? false);
+    const entry = auditRegression(file, id, opts.failed ? 'failed' : 'passed', opts.note, opts.at);
+    if (opts.json) {
+      console.log(JSON.stringify({ path: file, entry }, null, 2));
+      return;
+    }
+    const status = entry.stabilizedAt ? `stabilized at ${entry.stabilizedAt}` : `${entry.consecutiveCleanAudits}/14 clean audits`;
+    console.log(chalk.green(`Updated regression watchlist entry: ${entry.id} (${status})`));
+  });
+
 program
   .command('regressions')
   .description('List regression watchlist entries')
   .option('--path <dir>', 'Workspace path for local registry', '.')
   .option('--global', 'Use global registry under ~/.openclaw/.dr-agent')
+  .option('--include-stabilized', 'Include entries stabilized after 14 consecutive clean audits')
   .option('--json', 'Output JSON')
-  .action((opts: { path?: string; global?: boolean; json?: boolean }) => {
+  .action((opts: { path?: string; global?: boolean; includeStabilized?: boolean; json?: boolean }) => {
     const file = registryPath(opts.path ?? '.', opts.global ?? false);
     const db = loadRegistry(file);
+    const entries = activeEntries(db, opts.includeStabilized ?? false);
     if (opts.json) {
-      console.log(JSON.stringify({ path: file, ...db }, null, 2));
+      console.log(JSON.stringify({ path: file, schema: db.schema, entries }, null, 2));
       return;
     }
     console.log(chalk.bold('\n🩺 dr-agent regression watchlist\n'));
     console.log(chalk.dim(`Registry: ${file}\n`));
-    if (db.entries.length === 0) {
-      console.log(chalk.dim('  No entries.'));
+    if (entries.length === 0) {
+      console.log(chalk.dim('  No active entries.'));
       return;
     }
-    for (const entry of db.entries) {
+    for (const entry of entries) {
       const sevColor = entry.severity === 'high' ? chalk.red : entry.severity === 'medium' ? chalk.yellow : chalk.cyan;
       console.log(`  ${sevColor(`[${entry.severity.toUpperCase()}]`)} ${chalk.bold(entry.id)} — ${entry.title}`);
+      console.log(`     Created: ${entry.createdAt}`);
       console.log(`     Requirement: ${entry.requirement}`);
+      console.log(`     How to test: ${entry.howToTest}`);
+      if (entry.command) console.log(`     Command: ${entry.command}`);
+      console.log(`     Last regression: ${entry.lastKnownRegressionAt ?? 'never'}; clean audits: ${entry.consecutiveCleanAudits}/14`);
       for (const watch of entry.watch) console.log(`     Watch: ${watch}`);
       if (entry.source) console.log(chalk.dim(`     Source: ${entry.source}`));
       console.log();
