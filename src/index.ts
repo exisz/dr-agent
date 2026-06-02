@@ -6,6 +6,7 @@ import { loadDnaRules } from './rules/dna-rules.js';
 import { collectFiles } from './scanner.js';
 import { formatFindings } from './reporter.js';
 import type { Severity, Finding, Rule } from './types.js';
+import { addRegression, loadRegistry, registryPath, slugify } from './regression-registry.js';
 
 const program = new Command();
 
@@ -117,6 +118,75 @@ program
       const sevColor = r.severity === 'high' ? chalk.red : r.severity === 'medium' ? chalk.yellow : chalk.cyan;
       console.log(`  ${sevColor(`[${r.severity.toUpperCase()}]`)} ${chalk.bold(r.id)}`);
       console.log(`         ${r.title}`);
+      console.log();
+    }
+  });
+
+program
+  .command('regression')
+  .description('Manage regression watchlist entries stored in .dr-agent/regressions.json')
+  .command('add')
+  .description('Add a regression watchlist entry')
+  .requiredOption('--title <title>', 'Short title')
+  .requiredOption('--requirement <text>', 'Requirement that must not regress')
+  .requiredOption('--watch <text>', 'What future agents should watch for; repeat or separate with |')
+  .option('--id <id>', 'Stable entry id; defaults to a slug of title')
+  .option('--severity <level>', 'Severity (high|medium|low|info)', 'medium')
+  .option('--agent <id>', 'Owning agent/workspace id')
+  .option('--source <text>', 'Where this requirement came from')
+  .option('--path <dir>', 'Workspace path for local registry', '.')
+  .option('--global', 'Use global registry under ~/.openclaw/.dr-agent')
+  .option('--json', 'Output JSON')
+  .action((opts: { title: string; requirement: string; watch: string; id?: string; severity?: string; agent?: string; source?: string; path?: string; global?: boolean; json?: boolean }) => {
+    const severity = (opts.severity ?? 'medium') as Severity;
+    if (!['high', 'medium', 'low', 'info'].includes(severity)) {
+      console.error(chalk.red(`Invalid severity: ${opts.severity}`));
+      process.exit(1);
+    }
+    const file = registryPath(opts.path ?? '.', opts.global ?? false);
+    const entry = addRegression(file, {
+      id: opts.id ?? slugify(opts.title),
+      title: opts.title,
+      requirement: opts.requirement,
+      watch: opts.watch.split('|').map(w => w.trim()).filter(Boolean),
+      severity,
+      scope: opts.global ? 'global' : 'workspace',
+      agent: opts.agent,
+      source: opts.source,
+    });
+    if (opts.json) {
+      console.log(JSON.stringify({ path: file, entry }, null, 2));
+      return;
+    }
+    console.log(chalk.green(`Added regression watchlist entry: ${entry.id}`));
+    console.log(chalk.dim(`Registry: ${file}`));
+  });
+
+program
+  .command('regressions')
+  .description('List regression watchlist entries')
+  .option('--path <dir>', 'Workspace path for local registry', '.')
+  .option('--global', 'Use global registry under ~/.openclaw/.dr-agent')
+  .option('--json', 'Output JSON')
+  .action((opts: { path?: string; global?: boolean; json?: boolean }) => {
+    const file = registryPath(opts.path ?? '.', opts.global ?? false);
+    const db = loadRegistry(file);
+    if (opts.json) {
+      console.log(JSON.stringify({ path: file, ...db }, null, 2));
+      return;
+    }
+    console.log(chalk.bold('\n🩺 dr-agent regression watchlist\n'));
+    console.log(chalk.dim(`Registry: ${file}\n`));
+    if (db.entries.length === 0) {
+      console.log(chalk.dim('  No entries.'));
+      return;
+    }
+    for (const entry of db.entries) {
+      const sevColor = entry.severity === 'high' ? chalk.red : entry.severity === 'medium' ? chalk.yellow : chalk.cyan;
+      console.log(`  ${sevColor(`[${entry.severity.toUpperCase()}]`)} ${chalk.bold(entry.id)} — ${entry.title}`);
+      console.log(`     Requirement: ${entry.requirement}`);
+      for (const watch of entry.watch) console.log(`     Watch: ${watch}`);
+      if (entry.source) console.log(chalk.dim(`     Source: ${entry.source}`));
       console.log();
     }
   });
