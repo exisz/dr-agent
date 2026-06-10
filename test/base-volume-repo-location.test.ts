@@ -110,4 +110,59 @@ describe('base-volume-repo-location rule', () => {
       rmSync(fakeHome, { recursive: true, force: true });
     }
   });
+
+  it('allows one path segment with an allowedRepos wildcard', () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), 'dr-agent-home-'));
+    const repo = path.join(fakeHome, '.openclaw', 'workspaces', 'the-box');
+    mkdirSync(repo, { recursive: true });
+    execFileSync('git', ['init'], { cwd: repo, stdio: 'ignore' });
+
+    const configDir = path.join(fakeHome, '.openclaw', '.dr-agent');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(path.join(configDir, 'config.yaml'), [
+      'baseVolume:',
+      '  allowedRepos:',
+      `    - ${path.join(fakeHome, '.openclaw', 'workspaces', '*')}`,
+    ].join('\n'));
+    process.env.DR_AGENT_CONFIG_DIR = configDir;
+
+    const originalHome = process.env.HOME;
+    process.env.HOME = fakeHome;
+    try {
+      const findings = baseVolumeRepoLocation.check([], { scanRoot: repo });
+      expect(findings).toEqual([]);
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
+  });
+
+  it('does not allow nested repos through a one-segment wildcard', () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), 'dr-agent-home-'));
+    const repo = path.join(fakeHome, '.openclaw', 'workspaces', 'nested', 'repo');
+    mkdirSync(repo, { recursive: true });
+    execFileSync('git', ['init'], { cwd: repo, stdio: 'ignore' });
+
+    const configDir = path.join(fakeHome, '.openclaw', '.dr-agent');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(path.join(configDir, 'config.yaml'), [
+      'baseVolume:',
+      '  allowedRepos:',
+      `    - ${path.join(fakeHome, '.openclaw', 'workspaces', '*')}`,
+    ].join('\n'));
+    process.env.DR_AGENT_CONFIG_DIR = configDir;
+
+    const originalHome = process.env.HOME;
+    process.env.HOME = fakeHome;
+    try {
+      const findings = baseVolumeRepoLocation.check([], { scanRoot: repo });
+      expect(findings).toHaveLength(1);
+      expect(findings[0].ruleId).toBe('base-volume-repo-location');
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
+  });
 });

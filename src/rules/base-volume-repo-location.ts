@@ -4,7 +4,9 @@
 // explicit allowlist of operational repos only. Normal working repos belong on
 // the large external volume (for this host, usually /Volumes/2t or a symlink to
 // it). This rule flags scans whose git repo root resolves to the base volume,
-// unless that repo root is listed in dr-agent YAML config.
+// unless that repo root is listed in dr-agent YAML config. Allowlist entries
+// may use `*` for exactly one path segment (for example
+// `/Users/c/.openclaw/workspaces/*`), but wildcards never cross `/`.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -37,6 +39,27 @@ function expandHome(p: string): string {
 
 function normalizePath(p: string): string {
   return realpathOrResolve(expandHome(p)).replace(/\/$/, '');
+}
+
+function normalizeAllowlistEntry(p: string): string {
+  const expanded = expandHome(p);
+  if (expanded.includes('*')) return path.resolve(expanded).replace(/\/$/, '');
+  return normalizePath(expanded);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+}
+
+function globSegmentPatternToRegex(pattern: string): RegExp {
+  const normalized = pattern.replace(/\/$/, '');
+  const parts = normalized.split('*').map(escapeRegex);
+  return new RegExp(`^${parts.join('[^/]+')}$`);
+}
+
+function matchesAllowlistEntry(entry: string, repoRoot: string): boolean {
+  if (!entry.includes('*')) return entry === repoRoot;
+  return globSegmentPatternToRegex(entry).test(repoRoot);
 }
 
 function isUnder(parent: string, child: string): boolean {
@@ -111,7 +134,7 @@ function readAllowedRepos(): { entries: string[]; files: string[] } {
     for (const rawEntry of rawEntries) {
       const p = entryPath(rawEntry);
       if (!p) continue;
-      entries.push(normalizePath(p));
+      entries.push(normalizeAllowlistEntry(p));
     }
   }
 
@@ -120,7 +143,7 @@ function readAllowedRepos(): { entries: string[]; files: string[] } {
 
 function isAllowed(repoRoot: string, entries: string[]): boolean {
   const normalizedRepoRoot = normalizePath(repoRoot);
-  return entries.some(entry => entry === normalizedRepoRoot);
+  return entries.some(entry => matchesAllowlistEntry(entry, normalizedRepoRoot));
 }
 
 function configDisplay(files: string[]): string {
